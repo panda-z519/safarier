@@ -114,10 +114,10 @@ public struct Profile: Codable, Equatable, Identifiable, Sendable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         languages = try container.decodeIfPresent([String].self, forKey: .languages) ?? []
         timeZoneIdentifier = try container.decodeIfPresent(String.self, forKey: .timeZoneIdentifier)
-        if container.contains(.startupTabs) {
+        if container.contains(.startupTabs), (try? container.decodeNil(forKey: .startupTabs)) != true {
             startupTabs = try container.decode([StartupTab].self, forKey: .startupTabs)
         } else {
-            // 旧记录使用环境 ID，重复读取不会生成不同的草稿身份。
+            // 旧记录（或显式 null）使用环境 ID，重复读取不会生成不同的草稿身份。
             let tabID = id
             startupTabs = try container.decodeIfPresent(URL.self, forKey: .startURL)
                 .map { [StartupTab(id: tabID, url: $0)] } ?? []
@@ -180,10 +180,10 @@ public struct Profile: Codable, Equatable, Identifiable, Sendable {
             id: newID, name: newName, mode: mode, proxyID: proxyID, createdAt: createdAt,
             languages: languages, timeZoneIdentifier: timeZoneIdentifier,
             followProxyLanguages: followProxyLanguages, followProxyTimeZone: followProxyTimeZone,
-            startURL: startURL, notes: notes, spi: spi,
+            notes: notes, spi: spi,
             subscriptionID: subscriptionID, nodeName: nodeName, deviceModel: deviceModel,
             customOutboundJSON: customOutboundJSON, hideApplePayCardStatus: hideApplePayCardStatus,
-            startupTabs: startupTabs
+            startupTabs: startupTabs.map { StartupTab(url: $0.url, isEnabled: $0.isEnabled) }
         )
     }
 

@@ -36,8 +36,15 @@ final class StartupTabsCLITests: XCTestCase {
     func testInvalidURLDoesNotReplaceSavedStartupTabs() throws {
         let profile = Profile(name: "Valid", mode: .persistent, startURL: URL(string: "https://example.com"))
         try workspace.profiles.insert(profile)
-        XCTAssertEqual(ManagerCLI.run(["profile", "update", profile.id.uuidString, "--url", "https://"]), 1)
+        XCTAssertEqual(ManagerCLI.run(["profile", "update", profile.id.uuidString, "--url", "https://"]), 64)
+        XCTAssertEqual(ManagerCLI.run(["profile", "update", profile.id.uuidString, "--url", "ftp://example.com"]), 64)
         XCTAssertEqual(try workspace.profiles.record(id: profile.id), profile)
+    }
+
+    func testSchemelessURLIsNormalizedInCLI() throws {
+        XCTAssertEqual(ManagerCLI.run(["profile", "create", "--name", "Norm", "--url", "example.com/first"]), 0)
+        let profile = try XCTUnwrap(workspace.profiles.all().first)
+        XCTAssertEqual(profile.startupURLs.map(\.absoluteString), ["https://example.com/first"])
     }
 
     func testRepeatedOptionsRetainExistingLastValueSemantics() throws {

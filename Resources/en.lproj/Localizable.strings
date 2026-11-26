@@ -722,8 +722,6 @@
 "请选择订阅里的节点。" = "Select a node from the subscription.";
 "读取数据失败" = "Failed to Load Data";
 "调用失败：%@" = "Call failed: %@";
-"起始网址" = "Start URL";
-"起始网址不合法：%@" = "Invalid Start Page URL: %@";
 "起始网址只能是 http 或 https，现在是「%@」。" = "The start page URL must be http or https; it is currently “%@”.";
 "起始页面" = "Home Page";
 "超时（%lld 秒）" = "Timed out after %lld seconds";

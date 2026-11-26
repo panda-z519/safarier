@@ -126,6 +126,18 @@ SAFARIER_ARCH=universal scripts/build-app.sh    # universal | arm64 | x86_64 →
 
 `SAFARIER_VERSION` overrides the version and `SAFARIER_ICON_STYLE` picks the icon (`meridian`, `prism`, `titanium`, `shield`). The app is ad-hoc signed. Check it with `codesign --verify --deep --strict dist/Safarier.app` and `lipo -archs`.
 
+### GitHub automated builds and Releases
+
+`.github/workflows/release.yml` runs automatically when a `vX.Y.Z` tag is pushed, and can also be triggered manually from Actions with an existing tag. The workflow builds `sing-box` on macOS, verifies official Mieru helpers, packages `arm64`, `x86_64`, and `universal` ZIP archives with SHA-256 checksums, verifies signatures and architectures, and uploads all assets to the matching GitHub Release.
+
+```sh
+git push origin main
+git tag -a v1.5.1 -m "Release v1.5.1"
+git push origin v1.5.1
+```
+
+Point release tags at verified commits; the bundle version is read from the tag. The workflow uses the repository's `GITHUB_TOKEN` with no extra secrets, making it ready for personal forks (note that releases created with `GITHUB_TOKEN` do not trigger downstream `on: release` workflows such as `update-cask.yml`). Re-running the same tag updates the Release assets in place. The app remains ad-hoc signed.
+
 ### Update the Homebrew Cask
 
 This repository doubles as a Homebrew tap: `Casks/safarier.rb` sits at the repo root, and users install via an explicit URL (`brew tap cd1s/safarier https://github.com/Cd1s/safarier` → `brew install --cask cd1s/safarier/safarier`).

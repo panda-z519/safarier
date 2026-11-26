@@ -55,14 +55,17 @@ struct StartupTabsSection: View {
                         Button { move(tab.id, by: -1) } label: {
                             Label("上移", systemImage: "arrow.up")
                         }
+                        .help("上移")
                         .disabled(index == 0)
                         Button { move(tab.id, by: 1) } label: {
                             Label("下移", systemImage: "arrow.down")
                         }
+                        .help("下移")
                         .disabled(index == tabs.count - 1)
                         Button(role: .destructive) { tabs.removeAll { $0.id == tab.id } } label: {
                             Label("删除页签", systemImage: "trash")
                         }
+                        .help("删除页签")
                     }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)

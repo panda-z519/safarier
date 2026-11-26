@@ -58,7 +58,10 @@ final class StartupTabsTests: XCTestCase {
         XCTAssertEqual(workspace.runnerSpec(for: profile).startURLs, [urls[0], urls[2]])
         XCTAssertEqual(workspace.runnerSpec(for: profile, probe: true).startURLs, [urls[0]])
         XCTAssertEqual(workspace.runnerSpec(for: profile, url: urls[1]).startURLs, [urls[1]])
-        XCTAssertEqual(profile.duplicated(name: "Copy").startupTabs, tabs)
+        let duplicated = profile.duplicated(name: "Copy")
+        XCTAssertEqual(duplicated.startupTabs.map(\.url), tabs.map(\.url))
+        XCTAssertEqual(duplicated.startupTabs.map(\.isEnabled), tabs.map(\.isEnabled))
+        XCTAssertTrue(Set(duplicated.startupTabs.map(\.id)).isDisjoint(with: Set(tabs.map(\.id))), "复制环境应为启动页签生成新的标识")
         XCTAssertEqual(try JSONDecoder().decode(Profile.self, from: JSONEncoder().encode(profile)), profile)
         let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
         XCTAssertEqual(saved["startURL"] as? String, urls[0].absoluteString)
@@ -75,6 +78,15 @@ final class StartupTabsTests: XCTestCase {
         XCTAssertThrowsError(try Profile(name: "Invalid", mode: .persistent, startupTabs: [invalid]).validate())
         let valid = StartupTab(url: URL(string: "https://example.com")!)
         XCTAssertThrowsError(try Profile(name: "Duplicate", mode: .persistent, startupTabs: [valid, valid]).validate())
+    }
+
+    func testNullStartupTabsFallsBackSafelyWithoutFailingDecode() throws {
+        let withLegacy = try JSONDecoder().decode(Profile.self, from: profileJSON(tabs: "null"))
+        XCTAssertEqual(withLegacy.startupURLs, [URL(string: "https://example.com/legacy")!])
+        XCTAssertEqual(withLegacy.startupTabs.first?.id, id)
+
+        let withoutLegacy = try JSONDecoder().decode(Profile.self, from: profileJSON(tabs: "null", legacyURL: nil))
+        XCTAssertEqual(withoutLegacy.startupTabs, [])
     }
 
     func testLanguageRelaunchPreservesEveryURLAndBackgroundFlag() throws {

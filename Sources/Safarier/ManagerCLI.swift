@@ -252,7 +252,14 @@ enum ManagerCLI {
         let urls = args.values("--url")
         guard !urls.isEmpty else { return nil }
         if urls == ["none"] { return [] }
-        return try urls.map { StartupTab(url: try parseURL($0)) }
+        return try urls.map { StartupTab(url: try parseWebURL($0)) }
+    }
+
+    private static func parseWebURL(_ raw: String) throws -> URL {
+        guard let url = AddressInput.webURL(for: raw) else {
+            throw CLIError(L10n.text("--url 不是合法 URL：%@", raw))
+        }
+        return url
     }
 
     private static func parseURL(_ raw: String) throws -> URL {
