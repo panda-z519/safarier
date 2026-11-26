@@ -1,0 +1,103 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要构建并发布的已有版本标签，例如 v1.5.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo '需要 vX.Y.Z 格式的标签'; exit 1; }
+          [ "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" ]
+          echo "SAFARIER_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-singbox-1.14.4-go1.25
+
+      - name: Build universal sing-box
+        run: scripts/build-singbox.sh
+
+      - name: Prepare verified Mieru helpers
+        run: scripts/build-mieru.sh
+
+      - name: Build, sign and package all architectures
+        shell: bash
+        env:
+          SINGBOX_DIR: ${{ github.workspace }}/out/sing-box
+          MIERU_DIR: ${{ github.workspace }}/.build/mieru
+        run: |
+          set -euo pipefail
+          for arch in arm64 x86_64 universal; do
+            SAFARIER_ARCH="$arch" scripts/build-app.sh
+            archive="Safarier-${RELEASE_TAG}-macOS-${arch}.zip"
+            ditto -c -k --sequesterRsrc --keepParent dist/Safarier.app "dist/$archive"
+            (cd dist && shasum -a 256 "$archive" > "$archive.sha256")
+          done
+          (cd dist && shasum -a 256 -c ./*.zip.sha256)
+
+      - name: Retain installation packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Safarier-${{ env.RELEASE_TAG }}
+          path: |
+            dist/Safarier-*.zip
+            dist/Safarier-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          assets=(dist/Safarier-*.zip dist/Safarier-*.zip.sha256)
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "Safarier $RELEASE_TAG" --generate-notes \
+              --notes '提供 Apple Silicon（arm64）、Intel（x86_64）及 Universal 通用版。解压 ZIP 后将 Safarier.app 拖入应用程序目录。每个安装包附有 SHA-256 校验文件。应用使用 ad-hoc 签名。'
+          fi

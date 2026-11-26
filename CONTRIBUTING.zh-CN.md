@@ -126,6 +126,18 @@ SAFARIER_ARCH=universal scripts/build-app.sh    # universal | arm64 | x86_64 →
 
 `SAFARIER_VERSION` 覆盖版本号，`SAFARIER_ICON_STYLE` 选图标（`meridian`、`prism`、`titanium`、`shield`）。应用是 ad-hoc 签名，可以用 `codesign --verify --deep --strict dist/Safarier.app` 和 `lipo -archs` 检查。
 
+### GitHub 自动打包与 Release
+
+`.github/workflows/release.yml` 在推送 `vX.Y.Z` 标签时自动运行，也可在 Actions 页面手动指定已有标签。工作流在 macOS 上构建 sing-box、校验 Mieru 官方文件，再生成 arm64、x86_64 和 Universal 三种 ZIP 安装包及各自的 SHA-256 校验文件，校验签名和架构后上传到同名 GitHub Release。
+
+```sh
+git push origin main
+git tag -a v1.5.1 -m "发布 v1.5.1"
+git push origin v1.5.1
+```
+
+标签应指向已经验证的提交；安装包版本从标签读取。工作流使用当前仓库的 `GITHUB_TOKEN`，无需额外配置发布密钥，适用于个人 fork 仓库。重复运行同一标签会更新对应 Release 的安装包。应用沿用 ad-hoc 签名。
+
 ### 更新 Homebrew Cask
 
 本仓库自身就是 Homebrew tap：`Casks/safarier.rb` 在仓库根，用户用显式 URL tap 安装（`brew tap cd1s/safarier https://github.com/Cd1s/safarier` → `brew install --cask cd1s/safarier/safarier`）。

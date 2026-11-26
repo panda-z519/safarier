@@ -46,7 +46,7 @@ fi
 
 cp "$SRC/LICENSE" "$OUT/LICENSE"
 # 上游 LICENSE 只是版权声明；GPL 要求随程序附上许可证全文。
-curl -fsSL https://www.gnu.org/licenses/gpl-3.0.txt -o "$OUT/COPYING"
+curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 90 https://www.gnu.org/licenses/gpl-3.0.txt -o "$OUT/COPYING"
 grep -q 'GNU GENERAL PUBLIC LICENSE' "$OUT/COPYING"
 {
   echo "sing-box ${VERSION}，GPL-3.0-or-later（版权声明见 LICENSE，许可证全文见 COPYING），未修改源码。"
