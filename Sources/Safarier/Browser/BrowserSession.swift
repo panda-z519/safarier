@@ -112,10 +112,21 @@ final class BrowserSession: NSObject, NSApplicationDelegate, BrowserActions {
     }
 
     func start(url: URL?, background: Bool = false) {
+        start(urls: url.map { [$0] } ?? [], background: background)
+    }
+
+    /// 启动页签共用一个窗口，全部创建后再选中第一项，避免后台加签改变选中状态。
+    func start(urls: [URL], background: Bool = false) {
         _ = try? startAgentBridge()
-        let controller = openWindow(url: url, background: background)
-        controller.window.center()
+        let first = openWindow(url: urls.first, background: background)
+        first.window.center()
+        var anchor = first
+        for url in urls.dropFirst() {
+            anchor = openTab(in: anchor, url: url, background: true)
+        }
+        first.window.tabGroup?.selectedWindow = first.window
         if !background {
+            first.window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
     }

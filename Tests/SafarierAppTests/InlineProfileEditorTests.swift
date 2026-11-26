@@ -31,7 +31,7 @@ final class InlineProfileEditorTests: XCTestCase {
         editor.values.name = "Renamed"
         editor.values.languageSource = .custom
         editor.values.languages = "en-US, en"
-        editor.values.startURL = "example.com"
+        editor.values.startupTabs = [StartupTabDraft(url: "example.com")]
         editor.values.notes = "A note"
         model.selection = .profile(second.id)
         XCTAssertTrue(model.editor(for: first) === editor)
@@ -158,5 +158,49 @@ final class InlineProfileEditorTests: XCTestCase {
         XCTAssertEqual(record.notes, "Edited inline")
         XCTAssertEqual(try workspace.proxies.record(id: exit.id), exit)
         XCTAssertFalse(editor.hasChanges)
+    }
+
+    func testStartupTabsSaveOrderPauseResetAndDeletion() async throws {
+        let original = try insert("Startup")
+        let model = ManagerModel(workspace: workspace)
+        let editor = model.editor(for: original)
+        let first = StartupTabDraft(url: "example.com/first")
+        let paused = StartupTabDraft(url: "example.com/paused", isEnabled: false)
+        let third = StartupTabDraft(url: "example.com/third")
+        editor.values.startupTabs = [third, paused, first]
+        XCTAssertTrue(editor.hasChanges)
+        let saved = await editor.save(using: model, selectSavedProfile: false)
+        XCTAssertTrue(saved)
+        let record = try XCTUnwrap(workspace.profiles.record(id: original.id))
+        XCTAssertEqual(record.startupTabs.map(\.id), [third.id, paused.id, first.id])
+        XCTAssertEqual(record.startupTabs.map(\.isEnabled), [true, false, true])
+        XCTAssertEqual(record.startupURLs.map(\.absoluteString), ["https://example.com/third", "https://example.com/first"])
+        XCTAssertFalse(editor.hasChanges)
+        editor.values.startupTabs.removeAll()
+        editor.reset(to: record)
+        XCTAssertEqual(editor.values.startupTabs.map(\.id), [third.id, paused.id, first.id])
+        for index in editor.values.startupTabs.indices { editor.values.startupTabs[index].isEnabled = false }
+        let pausedSaved = await editor.save(using: model, selectSavedProfile: false)
+        XCTAssertTrue(pausedSaved)
+        XCTAssertNil(try workspace.profiles.record(id: original.id)?.startURL)
+        editor.values.startupTabs.removeAll()
+        let cleared = await editor.save(using: model, selectSavedProfile: false)
+        XCTAssertTrue(cleared)
+        XCTAssertEqual(try workspace.profiles.record(id: original.id)?.startupTabs, [])
+    }
+
+    func testInvalidPausedStartupTabKeepsDraftAndReportsRow() async throws {
+        let original = try insert("Invalid startup")
+        let model = ManagerModel(workspace: workspace)
+        let editor = model.editor(for: original)
+        editor.values.startupTabs = [StartupTabDraft(url: "example.com"), StartupTabDraft(url: "not a URL", isEnabled: false)]
+        let saved = await editor.save(using: model, selectSavedProfile: false)
+        XCTAssertFalse(saved)
+        XCTAssertTrue(editor.errorText?.contains("2") == true)
+        XCTAssertEqual(editor.values.startupTabs[1].url, "not a URL")
+        XCTAssertEqual(try workspace.profiles.record(id: original.id), original)
+        editor.values.startupTabs[1].url = ""
+        let emptySaved = await editor.save(using: model, selectSavedProfile: false)
+        XCTAssertFalse(emptySaved, "新增的空行应提示填写或删除，不能静默丢弃")
     }
 }
