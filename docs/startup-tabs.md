@@ -2,13 +2,13 @@
 
 Use the **Startup Tabs** section in the new or existing environment editor to configure URLs that open automatically when an environment launches.
 
-- Click **Add URL** to append an entry; **Open on startup** is checked by default.
-- Uncheck an entry to pause automatic opening while keeping its URL saved; check it again to resume.
-- Use the up/down buttons to reorder tabs and the remove button to delete an entry.
+- Click **Add Startup Tab** to append an entry; its switch is turned on by default.
+- Turn off a row's switch to pause automatic opening while keeping its URL saved; turn it back on to resume.
+- Drag the row handle, use the hover/focus up/down buttons, or open the row's context menu to reorder tabs (including **Move to First (Home)**) and remove an entry.
 - Click **Save** or **Create** to persist changes; **Revert** restores the latest saved configuration.
 - Editing a running environment affects only future launches and does not close or append tabs in the open window.
 
-On launch, all checked entries open in order in the same browser window, with the first tab selected. When no URLs are configured or every entry is paused, Safarier opens a single start page. A load failure in one tab does not affect the remaining tabs.
+On launch, all enabled entries open in order in the same browser window, with the first enabled tab selected and badged as **Home**. When no URLs are configured or every entry is paused, Safarier opens a single start page. A load failure in one tab does not affect the remaining tabs.
 
 Valid `http` / `https` web URLs are accepted. The scheme can be omitted — for example, `example.com` normalizes to `https://example.com`. Paused entries must still hold a valid URL, and newly added blank rows must be filled in or removed before saving.
 

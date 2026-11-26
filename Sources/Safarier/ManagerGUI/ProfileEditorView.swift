@@ -234,7 +234,7 @@ struct ProfileEditorView: View {
                     ProfileMetadataSections(model: model, profile: original)
                 }
 
-                StartupTabsSection(tabs: $editor.values.startupTabs)
+                StartupTabsSection(tabs: $editor.values.startupTabs, showsAllValidationErrors: editor.errorText != nil)
 
                 Section("其他") {
                     TextField("备注", text: $editor.values.notes, prompt: Text("可选"), axis: .vertical)

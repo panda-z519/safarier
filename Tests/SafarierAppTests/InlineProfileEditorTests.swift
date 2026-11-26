@@ -203,4 +203,62 @@ final class InlineProfileEditorTests: XCTestCase {
         let emptySaved = await editor.save(using: model, selectSavedProfile: false)
         XCTAssertFalse(emptySaved, "新增的空行应提示填写或删除，不能静默丢弃")
     }
+
+    func testStartupTabsSectionOrderPromoteReorderAndInlineValidation() {
+        let first = StartupTabDraft(url: "https://example.com/1", isEnabled: false)
+        let second = StartupTabDraft(url: "https://example.com/2", isEnabled: true)
+        let third = StartupTabDraft(url: "https://example.com/3", isEnabled: true)
+        var tabs = [first, second, third]
+
+        XCTAssertEqual(StartupTabsSection.firstEnabledID(in: tabs), second.id)
+        XCTAssertNil(StartupTabsSection.enabledOrder(of: first.id, in: tabs))
+        XCTAssertEqual(StartupTabsSection.enabledOrder(of: second.id, in: tabs), 1)
+        XCTAssertEqual(StartupTabsSection.enabledOrder(of: third.id, in: tabs), 2)
+
+        StartupTabsSection.move(&tabs, id: third.id, by: -1)
+        XCTAssertEqual(tabs.map(\.id), [first.id, third.id, second.id])
+        StartupTabsSection.move(&tabs, id: first.id, by: -1)
+        XCTAssertEqual(tabs.map(\.id), [first.id, third.id, second.id], "越界上移不应改变顺序")
+
+        StartupTabsSection.reorder(&tabs, moving: second.id, to: first.id)
+        XCTAssertEqual(tabs.map(\.id), [second.id, first.id, third.id])
+
+        StartupTabsSection.moveToTop(&tabs, id: first.id)
+        XCTAssertEqual(tabs.first?.id, first.id)
+        XCTAssertEqual(tabs.first?.isEnabled, true, "设为首个主页时应同时启用该页签")
+        XCTAssertEqual(StartupTabsSection.firstEnabledID(in: tabs), first.id)
+
+        let typingInvalid = StartupTabDraft(url: "https://")
+        XCTAssertFalse(
+            StartupTabsSection.shouldShowInlineError(tab: typingInvalid, focusedID: typingInvalid.id, touchedIDs: [typingInvalid.id], showsAll: false),
+            "正在输入且未失焦时不应中途报错"
+        )
+        XCTAssertTrue(
+            StartupTabsSection.shouldShowInlineError(tab: typingInvalid, focusedID: nil, touchedIDs: [typingInvalid.id], showsAll: false),
+            "失焦后非空无效网址应显示行内提示"
+        )
+        let emptyDraft = StartupTabDraft(url: "   ")
+        XCTAssertFalse(
+            StartupTabsSection.shouldShowInlineError(tab: emptyDraft, focusedID: nil, touchedIDs: [emptyDraft.id], showsAll: false),
+            "未提交前新增空白行不主动标红"
+        )
+        XCTAssertTrue(
+            StartupTabsSection.shouldShowInlineError(tab: emptyDraft, focusedID: emptyDraft.id, touchedIDs: [], showsAll: true),
+            "触发保存校验时空白行应标红提示"
+        )
+        XCTAssertFalse(
+            StartupTabsSection.shouldShowInlineError(tab: second, focusedID: nil, touchedIDs: [second.id], showsAll: true),
+            "合法网址任何时候都不应显示错误"
+        )
+
+        let snapshot = StartupTabsSection.DeletedTabSnapshot(tab: third, index: 2, remainingIDs: [first.id, second.id])
+        tabs.removeAll { $0.id == third.id }
+        XCTAssertTrue(StartupTabsSection.restoreDeleted(&tabs, from: snapshot))
+        XCTAssertEqual(tabs.map(\.id), [first.id, second.id, third.id])
+        XCTAssertFalse(
+            StartupTabsSection.restoreDeleted(&tabs, from: snapshot),
+            "若该页签标识已存在（例如外部还原后），撤销删除不得插入重复项"
+        )
+        XCTAssertEqual(tabs.count, 3)
+    }
 }
