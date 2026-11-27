@@ -21,6 +21,18 @@
 
 ---
 
+## Fork Changes Over Upstream & PR Status
+
+This fork is maintained on top of upstream [Cd1s/safarier](https://github.com/Cd1s/safarier) (`v1.5.0`). Below is a summary of changes in this fork and their upstream pull request status:
+
+| Change | Summary | Upstream PR Status |
+|---|---|---|
+| **Multi-Tab Startup Lists & Per-Item Pause** | Configure multiple startup URLs per environment, reorder them, and pause individual tabs without deleting them (see [Startup Tabs](docs/startup-tabs.md)). This fork also adds a reworked settings UI, blank-row blur handling, and a crash fix when deleting a focused startup tab. | Core feature merged upstream: [Cd1s/safarier#44](https://github.com/Cd1s/safarier/pull/44) (follow-up UI rework and focus/bounds fixes remain fork-only for now) |
+| **Manager Window Keep-Alive & Multi-Path Reopen** | Closing the manager window (`×` or `⌘W`) keeps the manager running in the background (`⌘Q` quits). Reopen or relaunch the manager anytime via the manager Dock icon, `⌘\``, browser menu **Window → Open Environment Manager** (`⌥⌘0`), or any Safarier Dock right-click menu, backed by single-instance locking and relaunch race protection. | Not submitted (fork-only) |
+| **GitHub Actions Tag-Based Release Workflow** | Automatically builds and publishes Apple Silicon, Intel, and Universal packages with SHA-256 checksums on `vX.Y.Z` tag pushes or manual dispatch, with selectable macOS runners. | Not submitted (fork release automation) |
+
+---
+
 ## Why Safarier?
 
 Most multi-account or "fingerprint" browsers on the market are built on modified versions of Chrome that try to fake hardware parameters using injected scripts. Modern websites can easily detect those fake scripts.
@@ -136,7 +148,7 @@ Safarier is designed to feel right at home for every Mac and Safari user:
 | **Focus Address Bar** | `⌘L` | **Show All Tabs Overview** | `⇧⌘\` |
 | **Reload / Force Reload** | `⌘R` / `⌥⌘R` | **Zoom Page / Zoom Text Only** | `⌘+` `⌘-` / `⌥⌘+` `⌥⌘-` |
 | **Find on Page / Use Selection** | `⌘F` / `⌘E` | **Web Inspector / Page Source** | `⌥⌘I` / `⌥⌘U` |
-| **Save Page / Export PDF** | `⌘S` / `⌘P` | **Show Downloads** | `⌥⌘L` |
+| **Save Page / Export PDF** | `⌘S` / `⌘P` | **Show Downloads / Open Manager** | `⌥⌘L` / `⌥⌘0` |
 
 ---
 
