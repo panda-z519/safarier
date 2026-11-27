@@ -41,6 +41,7 @@ struct StartupTabsSection: View {
     @FocusState private var focusedTabID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var touchedIDs: Set<UUID> = []
+    @State private var pendingNewTabIDs: Set<UUID> = []
     @State private var deletedSnapshot: DeletedTabSnapshot?
     @State private var undoDismissTask: Task<Void, Never>?
 
@@ -60,6 +61,7 @@ struct StartupTabsSection: View {
                         tab: tab,
                         focusedID: focusedTabID,
                         touchedIDs: touchedIDs,
+                        pendingIDs: pendingNewTabIDs,
                         showsAll: showsAllValidationErrors
                     )
                     StartupTabRow(
@@ -72,6 +74,7 @@ struct StartupTabsSection: View {
                         focusedTabID: $focusedTabID,
                         reduceMotion: reduceMotion,
                         onSubmit: { handleSubmit(for: tab.id) },
+                        onCancelEdit: { focusedTabID = nil },
                         onMove: { offset in animateChange { Self.move(&tabs, id: tab.id, by: offset) } },
                         onMoveToTop: { animateChange { Self.moveToTop(&tabs, id: tab.id) } },
                         onReorderFrom: { draggedID in
@@ -94,11 +97,15 @@ struct StartupTabsSection: View {
                 .foregroundStyle(.secondary)
         }
         .onChange(of: focusedTabID) { previous, _ in
-            if let previous { touchedIDs.insert(previous) }
+            guard let previous else { return }
+            animateChange {
+                Self.handleBlur(&tabs, pendingIDs: &pendingNewTabIDs, touchedIDs: &touchedIDs, blurredID: previous)
+            }
         }
         .onChange(of: tabs.map(\.id)) { _, currentIDs in
             let validIDs = Set(currentIDs)
             touchedIDs.formIntersection(validIDs)
+            pendingNewTabIDs.formIntersection(validIDs)
             if let snapshot = deletedSnapshot, currentIDs != snapshot.remainingIDs {
                 clearUndoSnapshot()
             }
@@ -106,6 +113,7 @@ struct StartupTabsSection: View {
         .onDisappear {
             undoDismissTask?.cancel()
             undoDismissTask = nil
+            Self.discardAllEmptyPending(&tabs, pendingIDs: &pendingNewTabIDs)
         }
     }
 
@@ -207,22 +215,34 @@ struct StartupTabsSection: View {
     // MARK: - 交互操作
 
     private func addTab() {
-        let tab = StartupTabDraft()
         clearUndoSnapshot()
-        animateChange { tabs.append(tab) }
-        focusedTabID = tab.id
+        var targetID: UUID?
+        animateChange {
+            targetID = Self.prepareAddTab(&tabs, pendingIDs: &pendingNewTabIDs)
+        }
+        if let targetID {
+            Task { @MainActor in
+                focusedTabID = targetID
+            }
+        }
     }
 
     private func deleteTab(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let removed = tabs[index]
+        let isEmptyPending = pendingNewTabIDs.remove(id) != nil
+            && removed.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         animateChange {
             tabs.remove(at: index)
-            deletedSnapshot = DeletedTabSnapshot(tab: removed, index: index, remainingIDs: tabs.map(\.id))
+            if !isEmptyPending {
+                deletedSnapshot = DeletedTabSnapshot(tab: removed, index: index, remainingIDs: tabs.map(\.id))
+            }
         }
         touchedIDs.remove(id)
         if focusedTabID == id { focusedTabID = nil }
-        scheduleUndoDismiss()
+        if !isEmptyPending {
+            scheduleUndoDismiss()
+        }
     }
 
     private func undoDelete() {
@@ -252,6 +272,12 @@ struct StartupTabsSection: View {
 
     private func handleSubmit(for id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = tabs[index].url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty, pendingNewTabIDs.contains(id) {
+            focusedTabID = nil
+            return
+        }
+        pendingNewTabIDs.remove(id)
         touchedIDs.insert(id)
         if index < tabs.count - 1 {
             focusedTabID = tabs[index + 1].id
@@ -315,21 +341,66 @@ struct StartupTabsSection: View {
         return true
     }
 
-    /// 失焦后才提示非空无效输入；触发提交校验时同时标出空行与无效行。
+    /// 若已有未填写的新增空白行则直接复用，避免连续点添加堆出多条空行。
+    static func prepareAddTab(_ tabs: inout [StartupTabDraft], pendingIDs: inout Set<UUID>) -> UUID {
+        if let existing = tabs.first(where: {
+            pendingIDs.contains($0.id) && $0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) {
+            return existing.id
+        }
+        let tab = StartupTabDraft()
+        tabs.append(tab)
+        pendingIDs.insert(tab.id)
+        return tab.id
+    }
+
+    /// 新增的空白页签失焦且未填写地址时自动撤销新增，形成闭环；已填内容的项转为正式行并记录失焦校验状态。
+    @discardableResult
+    static func handleBlur(
+        _ tabs: inout [StartupTabDraft],
+        pendingIDs: inout Set<UUID>,
+        touchedIDs: inout Set<UUID>,
+        blurredID: UUID
+    ) -> Bool {
+        guard let index = tabs.firstIndex(where: { $0.id == blurredID }) else {
+            pendingIDs.remove(blurredID)
+            return false
+        }
+        let trimmed = tabs[index].url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if pendingIDs.remove(blurredID) != nil, trimmed.isEmpty {
+            tabs.remove(at: index)
+            touchedIDs.remove(blurredID)
+            return true
+        }
+        touchedIDs.insert(blurredID)
+        return false
+    }
+
+    /// 页面离开时兜底清理未填写的新增空白行，避免留下无效草稿。
+    static func discardAllEmptyPending(_ tabs: inout [StartupTabDraft], pendingIDs: inout Set<UUID>) {
+        guard !pendingIDs.isEmpty else { return }
+        tabs.removeAll { tab in
+            pendingIDs.contains(tab.id) && tab.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        pendingIDs.removeAll()
+    }
+
+    /// 失焦后才提示无效输入；触发提交校验时同时标出空行与无效行。
     static func shouldShowInlineError(
         tab: StartupTabDraft,
         focusedID: UUID?,
         touchedIDs: Set<UUID>,
+        pendingIDs: Set<UUID> = [],
         showsAll: Bool
     ) -> Bool {
         guard tab.webURL == nil else { return false }
         if showsAll { return true }
-        let trimmed = tab.url.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty && focusedID != tab.id && touchedIDs.contains(tab.id)
+        guard focusedID != tab.id, touchedIDs.contains(tab.id) else { return false }
+        return !pendingIDs.contains(tab.id)
     }
 }
 
-/// 单行启动页签：序号/主页标识 + 融入式网址输入 + 悬停排序/删除 + 迷你拨动开关。
+/// 单行启动页签：左侧拖拽排序/序号 + 融入式网址输入 + 迷你拨动开关 + 右侧悬停删除。
 private struct StartupTabRow: View {
     @Binding var tab: StartupTabDraft
     let index: Int
@@ -340,16 +411,15 @@ private struct StartupTabRow: View {
     var focusedTabID: FocusState<UUID?>.Binding
     let reduceMotion: Bool
     let onSubmit: () -> Void
+    let onCancelEdit: () -> Void
     let onMove: (Int) -> Void
     let onMoveToTop: () -> Void
     let onReorderFrom: (UUID) -> Void
     let onDelete: () -> Void
 
     private enum ControlFocus: Hashable {
-        case moveUp
-        case moveDown
-        case delete
         case toggle
+        case delete
     }
 
     @State private var isHovered = false
@@ -358,14 +428,13 @@ private struct StartupTabRow: View {
     @FocusState private var controlFocus: ControlFocus?
 
     private var isFocused: Bool { focusedTabID.wrappedValue == tab.id }
-    private var showsActions: Bool { isHovered || isFocused || controlFocus != nil || isDropTargeted }
+    private var showsDelete: Bool { isHovered || isFocused || controlFocus != nil || isDropTargeted }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 leadingHandleAndBadge
                 urlInputField
-                hoverActionCluster
                 Toggle("启动时打开", isOn: $tab.isEnabled)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
@@ -376,6 +445,7 @@ private struct StartupTabRow: View {
                         ? L10n.text("关闭开关可暂停此页签的自动启动")
                         : L10n.text("开启开关以恢复此页签的自动启动"))
                     .accessibilityLabel(Text(L10n.text("启动时打开第 %lld 个页签", index + 1)))
+                deleteButton
             }
 
             if showsError {
@@ -496,6 +566,7 @@ private struct StartupTabRow: View {
                 .foregroundStyle(tab.isEnabled ? .primary : .secondary)
                 .opacity(tab.isEnabled ? 1 : 0.78)
                 .onSubmit(onSubmit)
+                .onExitCommand(perform: onCancelEdit)
                 .accessibilityLabel(Text(L10n.text("第 %lld 个启动页签的网址", index + 1)))
 
             if isHome {
@@ -540,67 +611,24 @@ private struct StartupTabRow: View {
         return .clear
     }
 
-    private var hoverActionCluster: some View {
-        HStack(spacing: 5) {
-            if totalCount > 1 {
-                HStack(spacing: 0) {
-                    Button { onMove(-1) } label: {
-                        Label("上移", systemImage: "chevron.up")
-                            .font(.system(size: 10, weight: .semibold))
-                            .frame(width: 20, height: 20)
-                            .contentShape(Rectangle())
-                    }
-                    .focused($controlFocus, equals: .moveUp)
-                    .help("上移")
-                    .disabled(index == 0)
-
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.1))
-                        .frame(width: 1, height: 12)
-
-                    Button { onMove(1) } label: {
-                        Label("下移", systemImage: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .frame(width: 20, height: 20)
-                            .contentShape(Rectangle())
-                    }
-                    .focused($controlFocus, equals: .moveDown)
-                    .help("下移")
-                    .disabled(index == totalCount - 1)
-                }
-                .foregroundStyle(.secondary)
+    private var deleteButton: some View {
+        Button(role: .destructive) { onDelete() } label: {
+            Label("删除页签", systemImage: "xmark")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isDeleteHovered ? .red : .secondary)
+                .frame(width: 20, height: 20)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.primary.opacity(0.05))
+                        .fill(isDeleteHovered ? Color.red.opacity(0.12) : .clear)
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
-                )
-
-                Rectangle()
-                    .fill(Color.primary.opacity(0.1))
-                    .frame(width: 1, height: 12)
-            }
-
-            Button(role: .destructive) { onDelete() } label: {
-                Label("删除页签", systemImage: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isDeleteHovered ? .red : .secondary)
-                    .frame(width: 20, height: 20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(isDeleteHovered ? Color.red.opacity(0.12) : .clear)
-                    )
-                    .contentShape(Rectangle())
-            }
-            .focused($controlFocus, equals: .delete)
-            .help("删除页签")
-            .onHover { isDeleteHovered = $0 }
+                .contentShape(Rectangle())
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
-        .opacity(showsActions ? 1 : 0)
-        .allowsHitTesting(showsActions)
+        .focused($controlFocus, equals: .delete)
+        .help("删除页签")
+        .onHover { isDeleteHovered = $0 }
+        .opacity(showsDelete ? 1 : 0)
+        .allowsHitTesting(showsDelete)
     }
 }

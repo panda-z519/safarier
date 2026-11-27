@@ -237,19 +237,52 @@ final class InlineProfileEditorTests: XCTestCase {
             StartupTabsSection.shouldShowInlineError(tab: typingInvalid, focusedID: nil, touchedIDs: [typingInvalid.id], showsAll: false),
             "失焦后非空无效网址应显示行内提示"
         )
-        let emptyDraft = StartupTabDraft(url: "   ")
+        let emptyPending = StartupTabDraft(url: "   ")
         XCTAssertFalse(
-            StartupTabsSection.shouldShowInlineError(tab: emptyDraft, focusedID: nil, touchedIDs: [emptyDraft.id], showsAll: false),
+            StartupTabsSection.shouldShowInlineError(tab: emptyPending, focusedID: nil, touchedIDs: [emptyPending.id], pendingIDs: [emptyPending.id], showsAll: false),
             "未提交前新增空白行不主动标红"
         )
         XCTAssertTrue(
-            StartupTabsSection.shouldShowInlineError(tab: emptyDraft, focusedID: emptyDraft.id, touchedIDs: [], showsAll: true),
+            StartupTabsSection.shouldShowInlineError(tab: emptyPending, focusedID: nil, touchedIDs: [emptyPending.id], pendingIDs: [], showsAll: false),
+            "已有页签被清空后失焦应标红提示"
+        )
+        XCTAssertTrue(
+            StartupTabsSection.shouldShowInlineError(tab: emptyPending, focusedID: emptyPending.id, touchedIDs: [], pendingIDs: [emptyPending.id], showsAll: true),
             "触发保存校验时空白行应标红提示"
         )
         XCTAssertFalse(
             StartupTabsSection.shouldShowInlineError(tab: second, focusedID: nil, touchedIDs: [second.id], showsAll: true),
             "合法网址任何时候都不应显示错误"
         )
+
+        var pendingIDs: Set<UUID> = []
+        var touchedIDs: Set<UUID> = []
+        let addedID = StartupTabsSection.prepareAddTab(&tabs, pendingIDs: &pendingIDs)
+        XCTAssertEqual(tabs.count, 4)
+        XCTAssertEqual(
+            StartupTabsSection.prepareAddTab(&tabs, pendingIDs: &pendingIDs),
+            addedID,
+            "已有未填写的新增空白行时应复用，不再重复堆叠空行"
+        )
+        XCTAssertEqual(tabs.count, 4)
+
+        tabs[3].url = "   "
+        XCTAssertTrue(
+            StartupTabsSection.handleBlur(&tabs, pendingIDs: &pendingIDs, touchedIDs: &touchedIDs, blurredID: addedID),
+            "未填地址的新增页签失焦时应自动撤销新增"
+        )
+        XCTAssertEqual(tabs.count, 3)
+        XCTAssertFalse(pendingIDs.contains(addedID))
+
+        let filledID = StartupTabsSection.prepareAddTab(&tabs, pendingIDs: &pendingIDs)
+        tabs[3].url = "example.com/new"
+        XCTAssertFalse(
+            StartupTabsSection.handleBlur(&tabs, pendingIDs: &pendingIDs, touchedIDs: &touchedIDs, blurredID: filledID),
+            "已填写地址的新增页签失焦时应保留"
+        )
+        XCTAssertEqual(tabs.count, 4)
+        XCTAssertTrue(touchedIDs.contains(filledID))
+        tabs.removeLast()
 
         let snapshot = StartupTabsSection.DeletedTabSnapshot(tab: third, index: 2, remainingIDs: [first.id, second.id])
         tabs.removeAll { $0.id == third.id }
