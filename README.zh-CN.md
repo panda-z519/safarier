@@ -4,7 +4,7 @@
   <p><strong>专为 macOS 打造的原生 Safari 多环境指纹浏览器</strong></p>
   <p>基于 Apple 真 Safari 内核与 Safari 无痕隐私护盾构建 — 支持多账号独立沙盒、34 款真实 Mac 机型模拟、语言时区自动跟随代理、内置全协议订阅引擎。</p>
   <p>
-    <a href="https://github.com/Cd1s/safarier/releases/latest"><img src="https://img.shields.io/badge/Release-v1.5.5-0A84FF?style=flat-square" alt="Release v1.5.5" /></a>
+    <a href="https://github.com/Cd1s/safarier/releases/latest"><img src="https://img.shields.io/badge/Release-v1.5.6-0A84FF?style=flat-square" alt="Release v1.5.6" /></a>
     <img src="https://img.shields.io/badge/macOS-14.0%2B-1d1d1f?style=flat-square&logo=apple" alt="macOS 14.0+" />
     <img src="https://img.shields.io/badge/Apple%20Silicon%20%26%20Intel-Universal-34C759?style=flat-square" alt="Universal" />
     <img src="https://img.shields.io/badge/Engine-Native%20Safari-007AFF?style=flat-square&logo=safari" alt="Native Safari" />
@@ -23,7 +23,7 @@
 
 ## 本 Fork 相对上游的改动与 PR 状态
 
-本仓库基于上游 [Cd1s/safarier](https://github.com/Cd1s/safarier)（`v1.5.0`）持续迭代，新增改动及向上游提交 PR 的情况如下：
+本仓库基于上游 [Cd1s/safarier](https://github.com/Cd1s/safarier) 持续迭代（已同步至上游最新 `main`，包含俄语界面本地化 [#43](https://github.com/Cd1s/safarier/pull/43) 与多启动页签合入 [#44](https://github.com/Cd1s/safarier/pull/44)），本 Fork 的增量改动及向上游提交 PR 的情况如下：
 
 | 改动项 | 主要内容 | 上游 PR 状态 |
 |---|---|---|
@@ -68,9 +68,9 @@ Cask 会自动选择 Apple Silicon 或 Intel 版本，后续用 `brew upgrade --
 
 | 版本 | 适用电脑 | 下载安装包 |
 |---|---|---|
-| **Apple Silicon 版** | 搭载 **Apple Silicon** 芯片的 Mac | [**`Safarier-v1.5.5-macOS-arm64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
-| **Intel 版** | 搭载 **Intel** 处理器的 Mac | [**`Safarier-v1.5.5-macOS-x86_64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
-| **Universal 通用版** | 双架构合一（Apple Silicon 与 Intel 通用） | [**`Safarier-v1.5.5-macOS-universal.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
+| **Apple Silicon 版** | 搭载 **Apple Silicon** 芯片的 Mac | [**`Safarier-v1.5.6-macOS-arm64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
+| **Intel 版** | 搭载 **Intel** 处理器的 Mac | [**`Safarier-v1.5.6-macOS-x86_64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
+| **Universal 通用版** | 双架构合一（Apple Silicon 与 Intel 通用） | [**`Safarier-v1.5.6-macOS-universal.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
 
 1. 解压下载的压缩包，将 **`Safarier.app`** 拖入「**应用程序**」（`/Applications`）文件夹。
 2. 首次打开如果系统弹出安全提示，在「终端」粘贴运行这一行命令即可正常打开：
