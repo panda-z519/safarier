@@ -4,7 +4,7 @@
   <p><strong>The Native Safari Multi-Environment Browser for macOS</strong></p>
   <p>Run dozens of isolated accounts side-by-side — powered by Apple's real Safari engine, Safari Private Browsing protection, 34 authentic Mac hardware presets, and built-in global proxy routing.</p>
   <p>
-    <a href="https://github.com/Cd1s/safarier/releases/latest"><img src="https://img.shields.io/badge/Release-v1.5.6-0A84FF?style=flat-square" alt="Release v1.5.6" /></a>
+    <a href="https://github.com/Cd1s/safarier/releases/latest"><img src="https://img.shields.io/badge/Release-v1.5.7-0A84FF?style=flat-square" alt="Release v1.5.7" /></a>
     <img src="https://img.shields.io/badge/macOS-14.0%2B-1d1d1f?style=flat-square&logo=apple" alt="macOS 14.0+" />
     <img src="https://img.shields.io/badge/Apple%20Silicon%20%26%20Intel-Universal-34C759?style=flat-square" alt="Universal" />
     <img src="https://img.shields.io/badge/Engine-Native%20Safari-007AFF?style=flat-square&logo=safari" alt="Native Safari" />
@@ -29,6 +29,7 @@ This fork tracks upstream [Cd1s/safarier](https://github.com/Cd1s/safarier) (syn
 |---|---|---|
 | **Multi-Tab Startup Lists & Per-Item Pause** | Configure multiple startup URLs per environment, reorder them, and pause individual tabs without deleting them (see [Startup Tabs](docs/startup-tabs.md)). This fork also adds a reworked settings UI, blank-row blur handling, and a crash fix when deleting a focused startup tab. | Core feature merged upstream: [Cd1s/safarier#44](https://github.com/Cd1s/safarier/pull/44) (follow-up UI rework and focus/bounds fixes remain fork-only for now) |
 | **Manager Window Keep-Alive & Multi-Path Reopen** | Closing the manager window (`×` or `⌘W`) keeps the manager running in the background (`⌘Q` quits). Reopen or relaunch the manager anytime via the manager Dock icon, `⌘\``, browser menu **Window → Open Environment Manager** (`⌥⌘0`), or any Safarier Dock right-click menu, backed by single-instance locking and relaunch race protection. | PR submitted: [Cd1s/safarier#45](https://github.com/Cd1s/safarier/pull/45) (reviewed & tested, awaiting merge) |
+| **Browser `⌘D` Add to Startup Tabs** | Press `⌘D` in any browser window to open a native Safari-style confirmation sheet to edit/trim the URL, choose append or position 1 (Home / `⇧⌘H`), detect duplicates or re-enable paused entries, sync live to the Environment Manager, and undo from a bottom toast. | PR submitted: [Cd1s/safarier#46](https://github.com/Cd1s/safarier/pull/46) (reviewed & tested, awaiting merge) |
 | **GitHub Actions Tag-Based Release Workflow** | Automatically builds and publishes Apple Silicon, Intel, and Universal packages with SHA-256 checksums on `vX.Y.Z` tag pushes or manual dispatch, with selectable macOS runners. | Not submitted (fork release automation) |
 
 ---
@@ -68,9 +69,9 @@ Choose the package for your Mac from [GitHub Releases](https://github.com/Cd1s/s
 
 | Edition | Recommended For | Download Package |
 |---|---|---|
-| **Apple Silicon** | Mac with **Apple Silicon** chip | [**`Safarier-v1.5.6-macOS-arm64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
-| **Intel** | Intel-based Mac | [**`Safarier-v1.5.6-macOS-x86_64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
-| **Universal** | Works on both Apple Silicon & Intel Macs | [**`Safarier-v1.5.6-macOS-universal.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
+| **Apple Silicon** | Mac with **Apple Silicon** chip | [**`Safarier-v1.5.7-macOS-arm64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
+| **Intel** | Intel-based Mac | [**`Safarier-v1.5.7-macOS-x86_64.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
+| **Universal** | Works on both Apple Silicon & Intel Macs | [**`Safarier-v1.5.7-macOS-universal.zip`**](https://github.com/Cd1s/safarier/releases/latest) |
 
 1. Unzip the downloaded file and drag **`Safarier.app`** into your **`Applications`** folder.
 2. If macOS prompts that the app cannot be verified on first launch, run this single command in Terminal:
