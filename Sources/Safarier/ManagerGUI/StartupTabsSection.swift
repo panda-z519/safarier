@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SafarierCore
 
@@ -44,6 +45,8 @@ struct StartupTabsSection: View {
     @State private var pendingNewTabIDs: Set<UUID> = []
     @State private var deletedSnapshot: DeletedTabSnapshot?
     @State private var undoDismissTask: Task<Void, Never>?
+    @State private var outsideClickMonitor: Any?
+    @State private var lastInternalActionAt: CFAbsoluteTime = 0
 
     var body: some View {
         let firstEnabledID = Self.firstEnabledID(in: tabs)
@@ -53,7 +56,9 @@ struct StartupTabsSection: View {
             if tabs.isEmpty {
                 emptyStateView
             } else {
-                ForEach($tabs) { $tab in
+                // 不使用 ForEach($tabs)：macOS 上删除聚焦的末行时，NSTextField 会在结束编辑阶段
+                // 回读旧的下标绑定，导致 Array._checkSubscript 越界崩溃；这里统一改用按 UUID 查找的安全绑定。
+                ForEach(tabs) { tab in
                     let index = tabs.firstIndex(where: { $0.id == tab.id }) ?? 0
                     let order = Self.enabledOrder(of: tab.id, in: tabs)
                     let isHome = tab.id == firstEnabledID
@@ -65,7 +70,9 @@ struct StartupTabsSection: View {
                         showsAll: showsAllValidationErrors
                     )
                     StartupTabRow(
-                        tab: $tab,
+                        tab: tab,
+                        url: Self.urlBinding(for: tab.id, fallback: tab.url, in: $tabs),
+                        isEnabled: Self.enabledBinding(for: tab.id, fallback: tab.isEnabled, in: $tabs),
                         index: index,
                         totalCount: tabs.count,
                         enabledOrder: order,
@@ -74,7 +81,7 @@ struct StartupTabsSection: View {
                         focusedTabID: $focusedTabID,
                         reduceMotion: reduceMotion,
                         onSubmit: { handleSubmit(for: tab.id) },
-                        onCancelEdit: { focusedTabID = nil },
+                        onCancelEdit: { resignActiveTextField() },
                         onMove: { offset in animateChange { Self.move(&tabs, id: tab.id, by: offset) } },
                         onMoveToTop: { animateChange { Self.moveToTop(&tabs, id: tab.id) } },
                         onReorderFrom: { draggedID in
@@ -96,7 +103,8 @@ struct StartupTabsSection: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .onChange(of: focusedTabID) { previous, _ in
+        .onChange(of: focusedTabID) { previous, current in
+            updateOutsideClickMonitor(active: current != nil)
             guard let previous else { return }
             animateChange {
                 Self.handleBlur(&tabs, pendingIDs: &pendingNewTabIDs, touchedIDs: &touchedIDs, blurredID: previous)
@@ -111,6 +119,7 @@ struct StartupTabsSection: View {
             }
         }
         .onDisappear {
+            stopOutsideClickMonitor()
             undoDismissTask?.cancel()
             undoDismissTask = nil
             Self.discardAllEmptyPending(&tabs, pendingIDs: &pendingNewTabIDs)
@@ -215,6 +224,7 @@ struct StartupTabsSection: View {
     // MARK: - 交互操作
 
     private func addTab() {
+        lastInternalActionAt = CFAbsoluteTimeGetCurrent()
         clearUndoSnapshot()
         var targetID: UUID?
         animateChange {
@@ -228,20 +238,70 @@ struct StartupTabsSection: View {
     }
 
     private func deleteTab(_ id: UUID) {
+        lastInternalActionAt = CFAbsoluteTimeGetCurrent()
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let removed = tabs[index]
         let isEmptyPending = pendingNewTabIDs.remove(id) != nil
             && removed.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if focusedTabID == id {
+            focusedTabID = nil
+            if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
+                window.makeFirstResponder(nil)
+            }
+        }
         animateChange {
-            tabs.remove(at: index)
-            if !isEmptyPending {
-                deletedSnapshot = DeletedTabSnapshot(tab: removed, index: index, remainingIDs: tabs.map(\.id))
+            if let currentIndex = tabs.firstIndex(where: { $0.id == id }) {
+                tabs.remove(at: currentIndex)
+                if !isEmptyPending {
+                    deletedSnapshot = DeletedTabSnapshot(tab: removed, index: currentIndex, remainingIDs: tabs.map(\.id))
+                }
             }
         }
         touchedIDs.remove(id)
-        if focusedTabID == id { focusedTabID = nil }
         if !isEmptyPending {
             scheduleUndoDismiss()
+        }
+    }
+
+    private func resignActiveTextField() {
+        focusedTabID = nil
+        if let window = NSApp.keyWindow, window.firstResponder is NSTextView {
+            window.makeFirstResponder(nil)
+        }
+    }
+
+    private func updateOutsideClickMonitor(active: Bool) {
+        guard active else {
+            stopOutsideClickMonitor()
+            return
+        }
+        guard outsideClickMonitor == nil else { return }
+        outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
+            guard let window = event.window, window === NSApp.keyWindow else { return event }
+            guard let editorView = window.firstResponder as? NSTextView else { return event }
+            let activeField = (editorView.delegate as? NSView) ?? editorView
+            let hitView = window.contentView?.hitTest(event.locationInWindow)
+            guard Self.shouldResignFocusOnClick(
+                activeField: activeField,
+                fieldEditor: editorView,
+                hitView: hitView
+            ) else {
+                return event
+            }
+            DispatchQueue.main.async {
+                guard CFAbsoluteTimeGetCurrent() - lastInternalActionAt > 0.15 else { return }
+                guard window.firstResponder === editorView else { return }
+                window.makeFirstResponder(nil)
+                focusedTabID = nil
+            }
+            return event
+        }
+    }
+
+    private func stopOutsideClickMonitor() {
+        if let monitor = outsideClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            outsideClickMonitor = nil
         }
     }
 
@@ -385,6 +445,43 @@ struct StartupTabsSection: View {
         pendingIDs.removeAll()
     }
 
+    /// 按 UUID 构造安全网址绑定：即便某行刚被删除而 NSTextField 仍在结束编辑，也绝不发生下标越界。
+    static func urlBinding(for id: UUID, fallback: String, in tabs: Binding<[StartupTabDraft]>) -> Binding<String> {
+        Binding(
+            get: { tabs.wrappedValue.first(where: { $0.id == id })?.url ?? fallback },
+            set: { newValue in
+                guard let index = tabs.wrappedValue.firstIndex(where: { $0.id == id }) else { return }
+                tabs.wrappedValue[index].url = newValue
+            }
+        )
+    }
+
+    /// 按 UUID 构造安全开关绑定，避免删除行后残留控件回调越界。
+    static func enabledBinding(for id: UUID, fallback: Bool, in tabs: Binding<[StartupTabDraft]>) -> Binding<Bool> {
+        Binding(
+            get: { tabs.wrappedValue.first(where: { $0.id == id })?.isEnabled ?? fallback },
+            set: { newValue in
+                guard let index = tabs.wrappedValue.firstIndex(where: { $0.id == id }) else { return }
+                tabs.wrappedValue[index].isEnabled = newValue
+            }
+        )
+    }
+
+    /// 点击位置不在当前编辑框且不是另一个可编辑输入框时，主动结束编辑以触发失焦闭环。
+    @MainActor
+    static func shouldResignFocusOnClick(activeField: NSView, fieldEditor: NSView, hitView: NSView?) -> Bool {
+        guard let hitView else { return true }
+        if hitView === activeField || hitView.isDescendant(of: activeField) { return false }
+        if hitView === fieldEditor || hitView.isDescendant(of: fieldEditor) { return false }
+        var cursor: NSView? = hitView
+        while let view = cursor {
+            if let textField = view as? NSTextField, textField.isEditable { return false }
+            if let textView = view as? NSTextView, textView.isEditable { return false }
+            cursor = view.superview
+        }
+        return true
+    }
+
     /// 失焦后才提示无效输入；触发提交校验时同时标出空行与无效行。
     static func shouldShowInlineError(
         tab: StartupTabDraft,
@@ -402,7 +499,9 @@ struct StartupTabsSection: View {
 
 /// 单行启动页签：左侧拖拽排序/序号 + 融入式网址输入 + 迷你拨动开关 + 右侧悬停删除。
 private struct StartupTabRow: View {
-    @Binding var tab: StartupTabDraft
+    let tab: StartupTabDraft
+    let url: Binding<String>
+    let isEnabled: Binding<Bool>
     let index: Int
     let totalCount: Int
     let enabledOrder: Int?
@@ -435,7 +534,7 @@ private struct StartupTabRow: View {
             HStack(spacing: 8) {
                 leadingHandleAndBadge
                 urlInputField
-                Toggle("启动时打开", isOn: $tab.isEnabled)
+                Toggle("启动时打开", isOn: isEnabled)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .labelsHidden()
@@ -492,7 +591,7 @@ private struct StartupTabRow: View {
                 .disabled(index == totalCount - 1)
             Divider()
             Button(tab.isEnabled ? L10n.text("暂停此页签") : L10n.text("启用此页签")) {
-                tab.isEnabled.toggle()
+                isEnabled.wrappedValue.toggle()
             }
             Button("删除页签", role: .destructive) { onDelete() }
         }
@@ -558,7 +657,7 @@ private struct StartupTabRow: View {
                 .opacity(!tab.isEnabled && !showsError ? 0.5 : 1)
                 .accessibilityHidden(true)
 
-            TextField("网址", text: $tab.url, prompt: Text("https://example.com"))
+            TextField("网址", text: url, prompt: Text("https://example.com"))
                 .textFieldStyle(.plain)
                 .labelsHidden()
                 .autocorrectionDisabled()

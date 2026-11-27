@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import XCTest
 import SafarierCore
 import SafarierNetwork
@@ -293,5 +295,58 @@ final class InlineProfileEditorTests: XCTestCase {
             "若该页签标识已存在（例如外部还原后），撤销删除不得插入重复项"
         )
         XCTAssertEqual(tabs.count, 3)
+
+        // 回归：删除末行后，残留的 NSTextField 绑定回读或写入绝不能触发数组越界崩溃。
+        let tabsBinding = Binding(get: { tabs }, set: { tabs = $0 })
+        let lastTab = tabs[2]
+        let safeURL = StartupTabsSection.urlBinding(for: lastTab.id, fallback: lastTab.url, in: tabsBinding)
+        let safeEnabled = StartupTabsSection.enabledBinding(for: lastTab.id, fallback: lastTab.isEnabled, in: tabsBinding)
+        tabs.removeLast()
+        XCTAssertEqual(safeURL.wrappedValue, lastTab.url)
+        safeURL.wrappedValue = "https://should-not-crash.example.com"
+        XCTAssertEqual(safeEnabled.wrappedValue, lastTab.isEnabled)
+        safeEnabled.wrappedValue = false
+        XCTAssertEqual(tabs.count, 2, "写入已删除行的安全绑定不应改动剩余项")
+    }
+
+    @MainActor
+    func testStartupTabsOutsideClickResignDecision() {
+        let container = NSView()
+        let activeField = NSTextField(string: "")
+        activeField.isEditable = true
+        let fieldEditor = NSTextView()
+        fieldEditor.isEditable = true
+        activeField.addSubview(fieldEditor)
+
+        let staticLabel = NSTextField(labelWithString: "静态标签")
+        let otherInput = NSTextField(string: "")
+        otherInput.isEditable = true
+        let emptyBackground = NSView()
+
+        container.addSubview(activeField)
+        container.addSubview(staticLabel)
+        container.addSubview(otherInput)
+        container.addSubview(emptyBackground)
+
+        XCTAssertFalse(
+            StartupTabsSection.shouldResignFocusOnClick(activeField: activeField, fieldEditor: fieldEditor, hitView: activeField),
+            "点击当前输入框自身不应失焦"
+        )
+        XCTAssertFalse(
+            StartupTabsSection.shouldResignFocusOnClick(activeField: activeField, fieldEditor: fieldEditor, hitView: fieldEditor),
+            "点击当前字段编辑器不应失焦"
+        )
+        XCTAssertFalse(
+            StartupTabsSection.shouldResignFocusOnClick(activeField: activeField, fieldEditor: fieldEditor, hitView: otherInput),
+            "点击另一个可编辑输入框应交由 AppKit 转移焦点"
+        )
+        XCTAssertTrue(
+            StartupTabsSection.shouldResignFocusOnClick(activeField: activeField, fieldEditor: fieldEditor, hitView: emptyBackground),
+            "点击表单空白区域应主动结束编辑"
+        )
+        XCTAssertTrue(
+            StartupTabsSection.shouldResignFocusOnClick(activeField: activeField, fieldEditor: fieldEditor, hitView: staticLabel),
+            "点击非可编辑静态文本标签也应主动结束编辑"
+        )
     }
 }
