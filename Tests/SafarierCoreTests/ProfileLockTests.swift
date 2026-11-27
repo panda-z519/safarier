@@ -90,5 +90,13 @@ final class ProfileLockTests: XCTestCase {
 
         XCTAssertNotEqual(scopeA, scopeB, "不同工作目录的唤醒隔离键必须互不相等")
         XCTAssertEqual(scopeA, scopeLink, "指向同一工作目录的符号链接应归一化到同一个隔离键")
+
+        // 配置变更同步通知独立于唤醒通知，且复用同样的工作目录隔离规则。
+        XCTAssertNotEqual(ProfilesSyncNotification.notificationName, ManagerWakeup.notificationName)
+        XCTAssertEqual(ProfilesSyncNotification.workspaceScope(for: dirA), scopeA)
+        XCTAssertNotEqual(
+            ProfilesSyncNotification.workspaceScope(for: dirA),
+            ProfilesSyncNotification.workspaceScope(for: dirB)
+        )
     }
 }

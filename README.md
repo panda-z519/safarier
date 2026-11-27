@@ -145,7 +145,7 @@ Safarier is designed to feel right at home for every Mac and Safari user:
 | **New Tab / New Window** | `⌘T` / `⌘N` | **Switch Windows (EN & CN IME)** | `⌘\`` / `⌘·` |
 | **Reopen Last Closed Tab** | `⇧⌘T` | **Switch to Tab 1–8 / Last Tab** | `⌘1`–`⌘8` / `⌘9` |
 | **Close Tab / Close Other Tabs** | `⌘W` / `⌥⌘W` | **Next / Previous Tab** | `⇧⌘]` / `⇧⌘[` |
-| **Focus Address Bar** | `⌘L` | **Show All Tabs Overview** | `⇧⌘\` |
+| **Focus Address Bar / Add to Startup Tabs** | `⌘L` / `⌘D` | **Show All Tabs Overview** | `⇧⌘\` |
 | **Reload / Force Reload** | `⌘R` / `⌥⌘R` | **Zoom Page / Zoom Text Only** | `⌘+` `⌘-` / `⌥⌘+` `⌥⌘-` |
 | **Find on Page / Use Selection** | `⌘F` / `⌘E` | **Web Inspector / Page Source** | `⌥⌘I` / `⌥⌘U` |
 | **Save Page / Export PDF** | `⌘S` / `⌘P` | **Show Downloads / Open Manager** | `⌥⌘L` / `⌥⌘0` |
